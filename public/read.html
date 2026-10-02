@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reader</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{max-width:100%;overflow-x:hidden}
+body{background:#000;color:#e2e8f0;font-family:sans-serif}
+.bar{position:fixed;top:0;left:0;right:0;transform:translateY(-100%);transition:transform .2s;z-index:10;display:flex;gap:8px;align-items:center;background:#1a1c23;padding:10px;border-bottom:1px solid #2d313e}
+.bar a{color:#a855f7;text-decoration:none;background:#252836;border:1px solid #363b4e;border-radius:6px;padding:6px 12px;font-size:13px}
+.bar select{flex:1;min-width:0;background:#252836;color:#fff;border:1px solid #363b4e;border-radius:6px;padding:6px;font-size:13px}
+.chap{padding:14px;text-align:center;color:#a855f7;font-size:13px;background:#111}
+#pages img{display:block;width:100%;max-width:800px;margin:0 auto;min-height:300px;background:#111}
+.msg{padding:30px;text-align:center;color:#888}
+#up{position:fixed;right:16px;bottom:24px;z-index:50;width:48px;height:48px;border-radius:50%;border:0;background:#a855f7;color:#fff;font-size:22px;opacity:.9;display:none}
+body.show .bar{transform:none}
+#up{display:block!important;opacity:0;pointer-events:none;transition:opacity .2s}
+body.show #up{opacity:.9;pointer-events:auto}
+</style><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#121317"></head><body>
+<div class="bar">
+  <a href="index.html">Home</a>
+  <select id="chapters"></select>
+</div>
+<div id="pages"></div>
+<div id="sentinel" class="msg">Loading...</div>
+<button id="up">&uarr;</button>
+<script>
+const mangaId = new URLSearchParams(location.search).get('id');
+let chapters = [], next = 0, loading = false, done = false, curChunk = null;
+const sel = document.getElementById('chapters');
+const box = document.getElementById('pages');
+const sentinel = document.getElementById('sentinel');
+const up = document.getElementById('up');
+
+async function init() {
+  try {
+    const m = await (await fetch('/api/manga/' + mangaId)).json();
+    document.title = m.title;
+    chapters = m.chapters || [];
+    if (!chapters.length) { sentinel.textContent = 'No readable English chapters found for this series.'; return; }
+    sel.innerHTML = chapters.map((c, i) => '<option value="' + i + '">' + c.title + '</option>').join('');
+    const saved = localStorage.getItem('pos_' + mangaId);
+    start(saved ? Math.min(+saved, chapters.length - 1) : 0);
+  } catch (e) { sentinel.textContent = 'Failed to load.'; }
+}
+
+function start(i) {
+  box.innerHTML = ''; next = i; done = false; curChunk = null;
+  sel.value = i; window.scrollTo(0, 0);
+  localStorage.setItem('pos_' + mangaId, i);
+  loadNext();
+}
+
+async function loadNext() {
+  if (loading || done) return;
+  if (next >= chapters.length) { done = true; sentinel.textContent = 'You reached the latest chapter.'; return; }
+  loading = true; sentinel.textContent = 'Loading...';
+  const i = next;
+  try {
+    const ch = await (await fetch('/api/chapter/' + chapters[i].id)).json();
+    const div = document.createElement('div');
+    div.dataset.i = i;
+    div.innerHTML = '<div class="chap">' + chapters[i].title + '</div>' +
+      (ch.pages || []).map(u => '<img src="' + u + '" loading="lazy">').join('');
+    box.appendChild(div);
+    next = i + 1;
+  } catch (e) { sentinel.textContent = 'Failed to load the next chapter. Scroll a little to retry.'; }
+  loading = false;
+  setTimeout(checkFill, 400);
+}
+
+function checkFill() {
+  if (sentinel.getBoundingClientRect().top < window.innerHeight + 1500) loadNext();
+}
+
+function track() {
+  let cur = null;
+  for (const c of box.children) { if (c.getBoundingClientRect().top <= 120) cur = c; }
+  if (cur) {
+    curChunk = cur;
+    const i = +cur.dataset.i;
+    if (sel.value != i) { sel.value = i; localStorage.setItem('pos_' + mangaId, i); }
+  }
+}
+
+let tick = false;
+window.addEventListener('scroll', () => {
+  up.style.display = window.scrollY > 600 ? 'block' : 'none';
+  if (tick) return; tick = true;
+  setTimeout(() => { tick = false; checkFill(); track(); }, 150);
+});
+
+up.onclick = () => {
+  const target = curChunk ? curChunk.getBoundingClientRect().top + window.scrollY - 56 : 0;
+  window.scrollTo({ top: target, behavior: 'smooth' });
+};
+sel.onchange = () => start(+sel.value);
+document.getElementById('pages').addEventListener('click',function(){document.body.classList.toggle('show')});
+init();
+</script><script src="reader-extra.js"></script></body></html>

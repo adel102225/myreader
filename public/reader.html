@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reader</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{max-width:100%;overflow-x:hidden}
+body{background:#000;color:#e2e8f0;font-family:sans-serif}
+.bar{position:sticky;top:0;z-index:10;display:flex;gap:6px;align-items:center;background:#1a1c23;padding:10px;border-bottom:1px solid #2d313e}
+.bar a,.bar button{color:#a855f7;text-decoration:none;background:#252836;border:1px solid #363b4e;border-radius:6px;padding:6px 10px;font-size:13px}
+.bar select{flex:1;min-width:0;background:#252836;color:#fff;border:1px solid #363b4e;border-radius:6px;padding:6px;font-size:13px}
+#pages img{display:block;width:100%;max-width:800px;margin:0 auto}
+.msg{padding:30px;text-align:center;color:#888}
+.nextbtn{display:block;width:100%;max-width:800px;margin:16px auto;background:#a855f7;color:#fff;border:0;border-radius:8px;padding:14px;font-size:15px}
+#counter{text-align:center;color:#888;font-size:12px;padding:6px}
+</style></head><body>
+<div class="bar">
+  <a href="index.html">Home</a>
+  <button id="prev">&lsaquo;</button>
+  <select id="chapters"></select>
+  <button id="next">&rsaquo;</button>
+  <button id="mode">Strip</button>
+</div>
+<div id="counter"></div>
+<div id="pages"><div class="msg">Loading...</div></div>
+<script>
+const mangaId = new URLSearchParams(location.search).get('id');
+let chapters = [], idx = 0, pages = [], pg = 0;
+let mode = localStorage.getItem('mode') || 'strip';
+const sel = document.getElementById('chapters');
+const box = document.getElementById('pages');
+const counter = document.getElementById('counter');
+const modeBtn = document.getElementById('mode');
+
+async function init() {
+  try {
+    const m = await (await fetch('/api/manga/' + mangaId)).json();
+    document.title = m.title;
+    chapters = m.chapters || [];
+    if (!chapters.length) { box.innerHTML = '<div class="msg">No readable English chapters found for this series.</div>'; return; }
+    sel.innerHTML = chapters.map((c, i) => '<option value="' + i + '">' + c.title + '</option>').join('');
+    const saved = localStorage.getItem('pos_' + mangaId);
+    load(saved ? Math.min(+saved, chapters.length - 1) : 0);
+  } catch (e) { box.innerHTML = '<div class="msg">Failed to load.</div>'; }
+}
+
+async function load(i) {
+  if (i < 0 || i >= chapters.length) return;
+  idx = i; pg = 0; sel.value = i;
+  localStorage.setItem('pos_' + mangaId, i);
+  box.innerHTML = '<div class="msg">Loading pages...</div>';
+  try {
+    const ch = await (await fetch('/api/chapter/' + chapters[i].id)).json();
+    pages = ch.pages || [];
+    if (!pages.length) { box.innerHTML = '<div class="msg">This chapter has no pages.</div>'; return; }
+    render();
+  } catch (e) { box.innerHTML = '<div class="msg">Failed to load chapter.</div>'; }
+}
+
+function render() {
+  modeBtn.textContent = mode === 'strip' ? 'Strip' : 'Page';
+  window.scrollTo(0, 0);
+  if (mode === 'strip') {
+    counter.textContent = '';
+    box.innerHTML = pages.map(u => '<img src="' + u + '" loading="lazy">').join('') +
+      '<button class="nextbtn" onclick="load(idx+1)">Next chapter</button>';
+  } else {
+    counter.textContent = (pg + 1) + ' / ' + pages.length;
+    box.innerHTML = '<img id="one" src="' + pages[pg] + '">';
+    document.getElementById('one').onclick = e => {
+      const right = e.clientX > window.innerWidth / 2;
+      if (right) { if (pg < pages.length - 1) { pg++; render(); } else load(idx + 1); }
+      else if (pg > 0) { pg--; render(); }
+    };
+  }
+}
+
+modeBtn.onclick = () => { mode = mode === 'strip' ? 'page' : 'strip'; localStorage.setItem('mode', mode); render(); };
+sel.onchange = () => load(+sel.value);
+document.getElementById('prev').onclick = () => load(idx - 1);
+document.getElementById('next').onclick = () => load(idx + 1);
+init();
+</script></body></html>
