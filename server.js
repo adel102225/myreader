@@ -257,3 +257,33 @@ app.get('/img', async (req, res) => {
     res.send(Buffer.from(await r.arrayBuffer()));
   } catch (e) { res.status(500).end(); }
 });
+app.get('/proxy', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) {
+      return res.status(400).send('Missing image URL');
+    }
+    
+    const response = await fetch(imageUrl, {
+      headers: { 
+        'Referer': 'https://mangadex.org',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      }
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).send('Failed to fetch image from CDN');
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err) {
+    console.error('Proxy execution error:', err);
+    res.status(500).send('Error proxying image');
+  }
+});
+
