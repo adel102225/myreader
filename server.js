@@ -11,6 +11,39 @@ const HEADERS = {
 
 // 1. Popular Catalog Endpoint
 app.get('/api/catalog', async (req, res) => {
+// 1. Popular Catalog Endpoint (Your existing code)
+app.get('/api/catalog', async (req, res) => {
+  // ... your existing catalog code ...
+});
+
+// 2. Add the Chapter Image Fetcher right below it:
+app.get('/api/chapter/:id', async (req, res) => {
+  try {
+    const chapterId = req.params.id;
+    
+    const serverResponse = await fetch(`https://api.mangadex.org/at-home/server/${chapterId}`);
+    const serverData = await serverResponse.json();
+    
+    if (!serverData.baseUrl) {
+      return res.status(404).json({ error: 'Chapter server not found' });
+    }
+    
+    const baseUrl = serverData.baseUrl;
+    const hash = serverData.chapter.hash;
+    const dataSaverPages = serverData.chapter.dataSaver;
+    
+    const pageUrls = dataSaverPages.map(filename => {
+      const originalUrl = `${baseUrl}/data-saver/${hash}/${filename}`;
+      return `/proxy?url=${encodeURIComponent(originalUrl)}`;
+    });
+    
+    res.json(pageUrls);
+  } catch (err) {
+    console.error('Error fetching chapter pages:', err);
+    res.status(500).json({ error: 'Failed to load chapter' });
+  }
+});
+
   try {
     const url = 'https://api.mangadex.org/manga?limit=18&includes[]=cover_art&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive';
     const response = await fetch(url, { headers: HEADERS });
