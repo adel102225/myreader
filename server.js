@@ -16,6 +16,30 @@ app.get('/api/catalog', async (req, res) => {
   // ... your existing catalog code ...
 });
 
+// Robust Proxy Route
+app.get('/proxy', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send('Missing url parameter');
+
+  try {
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': targetUrl
+      }
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+
+    const buffer = await response.arrayBuffer();
+    res.setHeader('Content-Type', contentType);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('Proxy error:', err);
+    res.status(500).send('Proxy failed to load target URL');
+  }
+});
+
 // 2. Add the Chapter Image Fetcher right below it:
 app.get('/api/chapter/:id', async (req, res) => {
   try {
