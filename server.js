@@ -245,3 +245,15 @@ app.get('/api/info/:id', async (req, res) => {
     res.json({ title, coverUrl: file ? `https://uploads.mangadex.org/covers/${id}/${file}.256.jpg` : '' });
   } catch (e) { res.status(500).json({}); }
 });
+
+app.get('/img', async (req, res) => {
+  try {
+    const p = new URL(req.query.u || '');
+    if (!/(\.mangadex\.network|\.mangadex\.org)$/.test(p.hostname)) return res.status(403).end();
+    const r = await fetch(p.href, { headers: { 'User-Agent': HEADERS['User-Agent'] } });
+    if (!r.ok) return res.status(r.status).end();
+    res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) { res.status(500).end(); }
+});
